@@ -48,22 +48,37 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return g.win.width, g.win.height
 }
 
-func moveImage(positionChan chan imagePos, scr windowDimensions) {
+func moveImage(positionChan chan imagePos, win windowDimensions) {
 	startTime := time.Now()
-	totalDuration := 10 * time.Second // Total time to move across the screen
+	totalDuration := 100 * time.Second // Total time to move across the screen
+
+	var currentPos imagePos
+	select {
+	case currentPos = <-positionChan:
+		// Successfully read the initial position
+	default:
+		// No initial position available, fallback to a default if necessary
+		currentPos = imagePos{x: 0, y: 0} // Default position, adjust as needed
+	}
 
 	for {
 		elapsed := time.Since(startTime)
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
-		if progress >= 1.0 {
-			// Once the image has moved across, you can stop the loop or reset progress
-			progress = 1.0
-			positionChan <- imagePos{x: float64(scr.width) * progress, y: float64(scr.height) * progress}
-			break // Stop after one move; remove this if continuous movement is desired
+		if currentPos.x >= float64(win.width) || currentPos.y >= float64(win.height) {
+			// If the image has moved off the screen, reset the position
+			currentPos.x = 0
+			currentPos.y = 0
+			// Once the image has fully moved across, you can stop the loop or reset progress
+			positionChan <- imagePos{x: currentPos.x + (progress * 10), y: currentPos.y + (progress * 10)}
+			// break
+
 		}
 
-		positionChan <- imagePos{x: float64(scr.width) * progress, y: float64(scr.height) * progress}
+		currentPos.x += (progress * 10)
+		currentPos.y += (progress * 10)
+		positionChan <- currentPos // Send the updated position
+
 		time.Sleep(16 * time.Millisecond) // About 60 FPS
 	}
 }
@@ -80,7 +95,8 @@ func main() {
 		log.Fatalf("failed to load image: %v", err)
 	}
 
-	positionChan := make(chan imagePos)
+	positionChan := make(chan imagePos, 1)
+	positionChan <- imagePos{x: 250, y: 150}
 
 	g := &Game{
 		win:          win,
