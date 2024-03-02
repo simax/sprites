@@ -49,8 +49,6 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func moveImage(positionChan chan imagePos, win windowDimensions) {
-	startTime := time.Now()
-	totalDuration := 100 * time.Second // Total time to move across the screen
 
 	var currentPos imagePos
 	select {
@@ -62,8 +60,7 @@ func moveImage(positionChan chan imagePos, win windowDimensions) {
 	}
 
 	for {
-		elapsed := time.Since(startTime)
-		progress := elapsed.Seconds() / totalDuration.Seconds()
+		const progress = 0.5
 
 		if currentPos.x >= float64(win.width) || currentPos.y >= float64(win.height) {
 			// If the image has moved off the screen, reset the position
