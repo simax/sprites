@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "image/png"
 	"log"
 	"time"
 
@@ -9,64 +8,89 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-// Declare your game struct
-type Game struct {
-	image       *ebiten.Image
-	startTime   time.Time
-	screenWidth float64
+type imagePos struct {
+	x float64
+	y float64
 }
 
-// Update proceeds the game state. Update is called every frame (1/60 [s]).
+type windowDimensions struct {
+	width  int
+	height int
+}
+
+type Game struct {
+	win          windowDimensions
+	img          *ebiten.Image
+	positionChan chan imagePos
+	imgPosition  imagePos
+}
+
 func (g *Game) Update() error {
-	// Calculate elapsed time in seconds since the game started
-	elapsed := time.Since(g.startTime).Seconds()
-
-	// Assuming we want the image to move across the screen in 5 seconds
-	// Calculate the new position based on the elapsed time
-	xPos := (elapsed / 5) * g.screenWidth
-
-	if xPos > g.screenWidth {
-		// Restart the movement once the image reaches the end of the screen
-		g.startTime = time.Now()
+	select {
+	case newPos := <-g.positionChan:
+		// Update position from channel
+		g.imgPosition.x = newPos.x
+		g.imgPosition.y = newPos.y
+	default:
+		// If no new position, do nothing
 	}
-
-	// Update the image position (this example keeps the Y position constant)
-	g.image.Clear()
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(xPos, 20) // Adjust Y position as needed
-	g.image.DrawImage(g.image, op)
-
 	return nil
 }
 
-// Draw draws the game screen. Draw is called every frame (1/60 [s]).
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.DrawImage(g.image, nil)
+	op := &ebiten.DrawImageOptions{}
+	// Use the updated position to draw the image
+	op.GeoM.Translate(g.imgPosition.x, g.imgPosition.y)
+	screen.DrawImage(g.img, op)
 }
 
-// Layout takes the outside size (e.g., the window size) and returns the (logical) screen size.
-// If you don't have to adjust the screen size with the outside size, just return a fixed size.
-func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return outsideWidth, outsideHeight
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	return g.win.width, g.win.height
+}
+
+func moveImage(positionChan chan imagePos, scr windowDimensions) {
+	startTime := time.Now()
+	totalDuration := 10 * time.Second // Total time to move across the screen
+
+	for {
+		elapsed := time.Since(startTime)
+		progress := elapsed.Seconds() / totalDuration.Seconds()
+
+		if progress >= 1.0 {
+			// Once the image has moved across, you can stop the loop or reset progress
+			progress = 1.0
+			positionChan <- imagePos{x: float64(scr.width) * progress, y: float64(scr.height) * progress}
+			break // Stop after one move; remove this if continuous movement is desired
+		}
+
+		positionChan <- imagePos{x: float64(scr.width) * progress, y: float64(scr.height) * progress}
+		time.Sleep(16 * time.Millisecond) // About 60 FPS
+	}
 }
 
 func main() {
-	img, _, err := ebitenutil.NewImageFromFile("path/to/your/image.png")
+
+	win := windowDimensions{width: 1024, height: 768}
+
+	ebiten.SetWindowSize(win.width, win.height)
+	ebiten.SetWindowTitle("Move Image")
+
+	img, _, err := ebitenutil.NewImageFromFile("C:\\Users\\simonlomax\\Pictures\\sprites\\truck.png")
 	if err != nil {
 		log.Fatalf("failed to load image: %v", err)
 	}
 
-	game := &Game{
-		image:       img,
-		startTime:   time.Now(),
-		screenWidth: 800, // Assuming a screen width of 800 pixels
+	positionChan := make(chan imagePos)
+
+	g := &Game{
+		win:          win,
+		img:          img,
+		positionChan: positionChan,
 	}
 
-	ebiten.SetWindowSize(800, 600)
-	ebiten.SetWindowTitle("Image Movement")
+	go moveImage(positionChan, win)
 
-	// Start the game
-	if err := ebiten.RunGame(game); err != nil {
+	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
 }
