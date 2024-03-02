@@ -62,7 +62,6 @@ func moveImage(positionChan chan imagePos, win windowDimensions) {
 	}
 
 	for {
-		// Calculate the progress of the image movement
 		elapsed := time.Since(startTime)
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
